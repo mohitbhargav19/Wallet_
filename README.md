@@ -1,0 +1,84 @@
+Brief Explanation: Wallet Risk Scoring for Compound Protocol
+This document outlines the methodology employed to assign a risk score (0-1000) to various wallet addresses based on their historical transaction behavior on the Compound V2/V3 protocol.
+
+1. Data Collection Method
+In a real-world scenario, transaction data for the provided 100 wallet addresses from Compound V2/V3 would be retrieved using one of the following methods:
+
+The Graph Protocol (Preferred): Querying the official Compound V2/V3 subgraphs via their GraphQL API. This method is efficient for retrieving structured event data (e.g., Supply, Borrow, RepayBorrow, LiquidateBorrow) for specific addresses and time ranges. It provides pre-indexed, decoded data, minimizing post-processing.
+
+Blockchain Explorers APIs (e.g., Etherscan API): Utilizing APIs from blockchain explorers to fetch transaction lists for each wallet. This would require parsing transaction input data and filtering by Compound contract addresses to identify relevant protocol interactions. An API key would be necessary for sufficient rate limits.
+
+Direct RPC Node Interaction (web3.py): Connecting to an Ethereum/Polygon RPC node and querying historical event logs emitted by Compound smart contracts. This offers the highest granularity but is resource-intensive and requires careful handling of event decoding.
+
+For this assignment, a mock dataset was generated to simulate the structure and characteristics of real Compound transaction data, allowing for the demonstration of subsequent steps.
+
+2. Feature Selection Rationale
+Meaningful features were engineered from the raw transaction data to quantify different aspects of a wallet's interaction and risk profile. The rationale for selecting these features is as follows:
+
+Activity & Engagement:
+
+total_transactions: Overall activity level.
+
+supply_count, borrow_count, repay_count, withdraw_count, liquidate_count: Frequency of specific actions, indicating usage patterns.
+
+unique_assets_count: Diversity of assets interacted with, potentially showing broader engagement or diversification.
+
+account_age_days: Longevity of interaction, suggesting established behavior.
+
+Financial Health & Leverage:
+
+total_supplied_amount, total_borrowed_amount, total_repaid_amount, total_withdrawn_amount, total_liquidated_amount: Raw values of capital movement.
+
+net_borrowed_amount: Represents outstanding debt; a higher value indicates higher exposure and potential risk.
+
+borrow_to_supply_ratio: Indicates the level of leverage taken; a high ratio suggests aggressive borrowing relative to supplied collateral.
+
+repay_to_borrow_ratio: Directly measures repayment efficiency; a higher ratio is a strong positive indicator of reliability.
+
+Risk Events:
+
+liquidate_count: Direct count of liquidation events experienced by the wallet; a very strong negative indicator.
+
+liquidation_frequency: The proportion of transactions that resulted in liquidation, highlighting consistent risky behavior.
+
+3. Scoring Method
+A heuristic-based scoring model was developed to assign a risk score between 0 and 1000. This approach directly maps engineered features to a score, making the logic transparent and interpretable.
+
+Normalization Method: Before applying scoring logic, raw numerical features were implicitly normalized through scaling (e.g., dividing by max value) or using np.log1p for skewed distributions, ensuring that no single feature disproportionately dominates the score based on its magnitude. The final scores are then clamped between 0 and 1000.
+
+Scoring Logic:
+
+Base Score: All wallets start with a base score of 500.
+
+Positive Contributions (increase score, reduce risk):
+
+High repay_to_borrow_ratio: Rewards consistent and complete repayment.
+
+High total_supplied_amount: Rewards significant capital contribution to the protocol.
+
+Longer account_age_days: Rewards long-term, stable engagement.
+
+High total_transactions: Rewards active, non-dormant usage.
+
+Negative Contributions (decrease score, increase risk):
+
+High liquidate_count and liquidation_frequency: Heavily penalizes wallets that have faced liquidations.
+
+High net_borrowed_amount: Penalizes significant outstanding debt.
+
+High borrow_to_supply_ratio: Penalizes aggressive leveraging.
+
+The contributions of each feature are weighted and summed, then the final score is clamped to the 0-1000 range.
+
+4. Justification of Risk Indicators Used
+The chosen risk indicators directly reflect common financial risk metrics adapted for a DeFi lending context:
+
+Liquidation Events (liquidate_count, liquidation_frequency): These are the most direct and severe indicators of risk. A wallet that has been liquidated has failed to maintain its collateral requirements, representing a direct loss event for the protocol (or other users who liquidate them). Frequent liquidations suggest a pattern of poor risk management or highly speculative behavior.
+
+Debt Management (repay_to_borrow_ratio, net_borrowed_amount): A wallet's ability to repay its debts is fundamental to creditworthiness. A high repay_to_borrow_ratio indicates reliability, while a large net_borrowed_amount signifies current exposure and potential future default risk.
+
+Leverage (borrow_to_supply_ratio): This ratio helps identify wallets that are taking on excessive risk by borrowing heavily against their supplied collateral. While leveraging is a common DeFi strategy, an extremely high ratio without consistent repayment indicates a precarious financial position.
+
+Engagement & Stability (account_age_days, total_supplied_amount, total_transactions): Wallets with a longer history of consistent, substantial engagement and supply are generally perceived as more stable and less likely to be "hit-and-run" or exploitative. They have a vested interest in the protocol's health.
+
+This approach is clear due to its explicit heuristic rules, justified by aligning with common financial risk principles, and scalable as it relies on aggregated features that can be computed for any number of wallets and integrated with automated data pipelines.
